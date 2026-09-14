@@ -1,0 +1,7 @@
+package com.socialvibe.app.model
+
+data class Message(
+    val id: String,
+    val text: String,
+    val isFromMe: Boolean
+)
