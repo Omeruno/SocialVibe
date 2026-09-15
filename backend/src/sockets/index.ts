@@ -71,6 +71,22 @@ async function handleConnection(socket: Socket) {
     await broadcastPresence(userId, payload.status);
   });
 
+  // Marks everything the other side has sent us as read, then tells them
+  // so their UI can flip sent messages to "read" — GET /messages already
+  // returns readAt for the eventually-consistent case (client wasn't
+  // connected when this fired), this event is only for the instant update.
+  socket.on("message:read", async (payload: { contactId: string }) => {
+    if (!payload?.contactId) return;
+    const readAt = new Date();
+    const result = await prisma.message.updateMany({
+      where: { senderId: payload.contactId, receiverId: userId, readAt: null },
+      data: { readAt },
+    });
+    if (result.count > 0) {
+      io?.to(userRoom(payload.contactId)).emit("message:read", { by: userId, at: readAt.toISOString() });
+    }
+  });
+
   socket.on("disconnect", () => {
     unmarkOnline(userId, socket.id);
     if (!isOnline(userId)) {
