@@ -30,5 +30,6 @@ fun MessageInfo.toMessage(currentUserId: String): Message = Message(
     id = id,
     text = text,
     isFromMe = senderId == currentUserId,
-    timestamp = parseIsoToEpochMillis(createdAt)
+    timestamp = parseIsoToEpochMillis(createdAt),
+    isRead = readAt != null
 )

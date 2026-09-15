@@ -144,6 +144,15 @@ class ChatRepository(context: Context) {
         it.getString("userId") to UserStatus.valueOf(it.getString("status"))
     }
 
+    // (contactId who read our messages, epoch millis of everything up to
+    // and including that moment) — the ViewModel uses this to flip our
+    // already-sent messages in that thread over to "read" instantly.
+    fun readReceipts(): Flow<Pair<String, Long>> = socket.on("message:read").map {
+        it.getString("by") to parseIsoToEpochMillis(it.getString("at"))
+    }
+
+    fun markRead(contactId: String) = socket.markRead(contactId)
+
     fun setTyping(contactId: String, isTyping: Boolean) = socket.setTyping(contactId, isTyping)
 
     fun setPresence(status: UserStatus) = socket.setPresence(status.name)

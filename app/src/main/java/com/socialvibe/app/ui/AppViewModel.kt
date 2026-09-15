@@ -54,8 +54,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 _messagesByContact.update { current ->
                     current + (contactId to (current[contactId].orEmpty() + message))
                 }
-                if (contactId != activeChatContactId && !message.isFromMe) {
-                    bumpUnread(contactId)
+                if (!message.isFromMe) {
+                    if (contactId == activeChatContactId) {
+                        repository.markRead(contactId)
+                    } else {
+                        bumpUnread(contactId)
+                    }
+                }
+            }
+        }
+        viewModelScope.launch {
+            repository.readReceipts().collect { (contactId, readUpToMillis) ->
+                _messagesByContact.update { current ->
+                    val thread = current[contactId] ?: return@update current
+                    val updated = thread.map { message ->
+                        if (message.isFromMe && !message.isRead && message.timestamp <= readUpToMillis) {
+                            message.copy(isRead = true)
+                        } else {
+                            message
+                        }
+                    }
+                    current + (contactId to updated)
                 }
             }
         }
@@ -125,6 +144,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun openChat(contactId: String) {
         activeChatContactId = contactId
         _contacts.update { list -> list.map { if (it.id == contactId) it.copy(unreadCount = 0) else it } }
+        repository.markRead(contactId)
         viewModelScope.launch {
             repository.loadMessages(contactId).onSuccess { history ->
                 _messagesByContact.update { it + (contactId to history) }

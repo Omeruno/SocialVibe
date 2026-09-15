@@ -33,6 +33,7 @@ import com.socialvibe.app.model.Contact
 import com.socialvibe.app.model.Message
 import com.socialvibe.app.ui.components.XpTitleBar
 import com.socialvibe.app.ui.components.pressScale
+import com.socialvibe.app.ui.theme.XpBlueTitle
 import com.socialvibe.app.ui.theme.XpBubbleMine
 import com.socialvibe.app.ui.theme.XpBubbleTheirs
 import com.socialvibe.app.ui.theme.XpSilver
@@ -129,12 +130,17 @@ private fun MessageBubble(message: Message) {
         ) {
             Text(text = message.text)
             Text(
-                text = timeFormatter.format(Date(message.timestamp)),
+                text = timeFormatter.format(Date(message.timestamp)) + readMarker(message),
                 fontSize = 10.sp,
-                color = Color.DarkGray
+                color = if (message.isFromMe && message.isRead) XpBlueTitle else Color.DarkGray
             )
         }
     }
+}
+
+private fun readMarker(message: Message): String {
+    if (!message.isFromMe) return ""
+    return if (message.isRead) "  ✓✓" else "  ✓"
 }
 
 @Composable

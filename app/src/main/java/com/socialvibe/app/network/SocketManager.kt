@@ -45,6 +45,10 @@ class SocketManager(private val baseUrl: String) {
         socket?.emit("presence:update", JSONObject().put("status", status))
     }
 
+    fun markRead(contactId: String) {
+        socket?.emit("message:read", JSONObject().put("contactId", contactId))
+    }
+
     fun on(event: String): Flow<JSONObject> = callbackFlow {
         val listener = Emitter.Listener { args ->
             (args.getOrNull(0) as? JSONObject)?.let { trySend(it) }
