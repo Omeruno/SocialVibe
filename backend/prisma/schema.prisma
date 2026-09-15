@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ONLINE
+  AWAY
+  BUSY
+  OFFLINE
+}
+
+model User {
+  id           String     @id @default(uuid())
+  username     String     @unique
+  passwordHash String
+  status       UserStatus @default(OFFLINE)
+  statusMessage String    @default("")
+  createdAt    DateTime   @default(now())
+
+  contactsOf     Contact[] @relation("ContactsOfUser")
+  contactedBy    Contact[] @relation("ContactIsUser")
+
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+
+  refreshTokens RefreshToken[]
+}
+
+// Directed contact relationship: ownerId added contactId as a contact.
+// Kept one-directional so "adding a contact" never requires the other
+// side's consent up front; a real "friend request" flow can layer on
+// top of this later without a schema change.
+model Contact {
+  id        String   @id @default(uuid())
+  ownerId   String
+  contactId String
+  createdAt DateTime @default(now())
+
+  owner   User @relation("ContactsOfUser", fields: [ownerId], references: [id])
+  contact User @relation("ContactIsUser", fields: [contactId], references: [id])
+
+  @@unique([ownerId, contactId])
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  text       String
+  createdAt  DateTime @default(now())
+  deliveredAt DateTime?
+  readAt     DateTime?
+
+  sender   User @relation("SentMessages", fields: [senderId], references: [id])
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id])
+
+  @@index([senderId, receiverId, createdAt])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id])
+}

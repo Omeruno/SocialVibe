@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: socialvibe
+      POSTGRES_PASSWORD: socialvibe_dev
+      POSTGRES_DB: socialvibe
+    ports:
+      - "5432:5432"
+    volumes:
+      - socialvibe_db_data:/var/lib/postgresql/data
+
+volumes:
+  socialvibe_db_data:
