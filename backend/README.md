@@ -56,7 +56,13 @@ Connect with `auth: { token: <accessToken> }`. Events:
 
 ## Known gaps (intentionally not built yet)
 
-- No rate limiting / abuse protection — fine for local dev with people you trust, not for an open server
 - No message editing/deletion
 - No group chats — everything here is 1:1
-- Refresh tokens are stored in plaintext in the DB; fine for a personal project, but a production-grade version would hash them like passwords
+- No TLS — plain HTTP/WS, fine for local dev, must sit behind a reverse
+  proxy (e.g. Nginx + Let's Encrypt) with HTTPS/WSS before this ever
+  touches the open internet
+- `readAt` is tracked in the DB but nothing sets it yet — no read receipts
+
+Rate limiting (5/min on auth routes, 300/min globally) and hashed refresh
+tokens (selector/verifier split, bcrypt) are done — see the auth routes and
+`prisma/schema.prisma`.
