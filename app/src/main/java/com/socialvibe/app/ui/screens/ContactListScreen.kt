@@ -2,6 +2,7 @@ package com.socialvibe.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,9 +16,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,41 +33,117 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.socialvibe.app.data.MockData
 import com.socialvibe.app.model.Contact
+import com.socialvibe.app.model.UserStatus
+import com.socialvibe.app.ui.components.ColorDot
 import com.socialvibe.app.ui.components.XpTitleBar
+import com.socialvibe.app.ui.components.pressScale
 import com.socialvibe.app.ui.theme.XpGrayOffline
 import com.socialvibe.app.ui.theme.XpGreenOnline
 import com.socialvibe.app.ui.theme.XpSilver
+import com.socialvibe.app.ui.theme.colorForStatus
 
 @Composable
-fun ContactListScreen(onContactClick: (Contact) -> Unit) {
+fun ContactListScreen(
+    contacts: List<Contact>,
+    myStatus: UserStatus,
+    onStatusChange: (UserStatus) -> Unit,
+    onContactClick: (Contact) -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+    val filtered = remember(contacts, query) {
+        if (query.isBlank()) contacts else contacts.filter { it.name.contains(query, ignoreCase = true) }
+    }
+    val online = remember(filtered) { filtered.filter { it.isOnline } }
+    val offline = remember(filtered) { filtered.filter { !it.isOnline } }
+
     Column(modifier = Modifier.fillMaxSize().background(XpSilver)) {
         XpTitleBar(title = "SocialVibe — Contacts")
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(MockData.contacts) { contact ->
-                ContactRow(contact = contact, onClick = { onContactClick(contact) })
-                HorizontalDivider()
+        MyProfileRow(status = myStatus, onStatusChange = onStatusChange)
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            placeholder = { Text("Search contacts...") },
+            singleLine = true
+        )
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
+            if (online.isNotEmpty()) {
+                item { SectionHeader(text = "Online (${online.size})") }
+                items(online) { contact ->
+                    ContactRow(contact = contact, onClick = { onContactClick(contact) })
+                    HorizontalDivider()
+                }
+            }
+            if (offline.isNotEmpty()) {
+                item { SectionHeader(text = "Offline (${offline.size})") }
+                items(offline) { contact ->
+                    ContactRow(contact = contact, onClick = { onContactClick(contact) })
+                    HorizontalDivider()
+                }
             }
         }
     }
 }
 
 @Composable
+private fun MyProfileRow(status: UserStatus, onStatusChange: (UserStatus) -> Unit) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { menuExpanded = true }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ColorDot(color = colorForStatus(status), size = 12.dp)
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "You", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text(text = status.label, fontSize = 12.sp)
+            }
+            Text(text = "▾", fontWeight = FontWeight.Bold)
+        }
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            UserStatus.values().forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.label) },
+                    onClick = {
+                        onStatusChange(option)
+                        menuExpanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text = text,
+        fontWeight = FontWeight.Bold,
+        fontSize = 12.sp,
+        color = Color.Gray,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    )
+}
+
+@Composable
 private fun ContactRow(contact: Contact, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .pressScale(interactionSource)
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Spacer(
-            modifier = Modifier
-                .size(10.dp)
-                .clip(CircleShape)
-                .background(if (contact.isOnline) XpGreenOnline else XpGrayOffline)
-        )
+        ColorDot(color = if (contact.isOnline) XpGreenOnline else XpGrayOffline)
         Spacer(modifier = Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(text = contact.name, fontWeight = FontWeight.Bold, fontSize = 15.sp)
