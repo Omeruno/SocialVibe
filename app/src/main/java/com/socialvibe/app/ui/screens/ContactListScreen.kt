@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.socialvibe.app.model.Contact
 import com.socialvibe.app.model.UserStatus
+import com.socialvibe.app.ui.components.Avatar
 import com.socialvibe.app.ui.components.ColorDot
 import com.socialvibe.app.ui.components.XpTitleBar
 import com.socialvibe.app.ui.components.pressScale
@@ -143,7 +144,14 @@ private fun ContactRow(contact: Contact, onClick: () -> Unit) {
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ColorDot(color = if (contact.isOnline) XpGreenOnline else XpGrayOffline)
+        Box {
+            Avatar(name = contact.name)
+            ColorDot(
+                color = if (contact.isOnline) XpGreenOnline else XpGrayOffline,
+                size = 10.dp,
+                modifier = Modifier.align(Alignment.BottomEnd)
+            )
+        }
         Spacer(modifier = Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(text = contact.name, fontWeight = FontWeight.Bold, fontSize = 15.sp)

@@ -29,6 +29,7 @@ import com.socialvibe.app.ui.components.DockTab
 import com.socialvibe.app.ui.screens.ChatScreen
 import com.socialvibe.app.ui.screens.ContactListScreen
 import com.socialvibe.app.ui.screens.SettingsScreen
+import com.socialvibe.app.ui.screens.SplashScreen
 import com.socialvibe.app.ui.theme.SocialVibeTheme
 
 class MainActivity : ComponentActivity() {
@@ -45,13 +46,14 @@ class MainActivity : ComponentActivity() {
 }
 
 private sealed class Screen {
+    data object Splash : Screen()
     data object Home : Screen()
     data class Chat(val contact: Contact) : Screen()
 }
 
 @Composable
 private fun SocialVibeApp() {
-    var screen by remember { mutableStateOf<Screen>(Screen.Home) }
+    var screen by remember { mutableStateOf<Screen>(Screen.Splash) }
     var tab by remember { mutableStateOf(DockTab.CONTACTS) }
     var myStatus by remember { mutableStateOf(UserStatus.ONLINE) }
     val contacts = remember { MockData.contacts.toMutableStateList() }
@@ -75,6 +77,7 @@ private fun SocialVibeApp() {
             label = "screen-transition"
         ) { targetScreen ->
             when (targetScreen) {
+                is Screen.Splash -> SplashScreen(onFinished = { screen = Screen.Home })
                 is Screen.Home -> when (tab) {
                     DockTab.CONTACTS -> ContactListScreen(
                         contacts = contacts,
