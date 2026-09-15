@@ -62,12 +62,18 @@ model Message {
   @@index([senderId, receiverId, createdAt])
 }
 
+// Split selector/verifier design (same idea as Laravel's "remember me"
+// tokens): `selector` is an indexed, plaintext-safe lookup key; the actual
+// secret half (`verifier`) is only ever stored hashed, so a database leak
+// alone can't be replayed as a working refresh token. The client is handed
+// `${selector}.${verifier}` as one opaque string.
 model RefreshToken {
-  id        String   @id @default(uuid())
-  token     String   @unique
-  userId    String
-  createdAt DateTime @default(now())
-  expiresAt DateTime
+  id           String   @id @default(uuid())
+  selector     String   @unique
+  verifierHash String
+  userId       String
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
 
   user User @relation(fields: [userId], references: [id])
 }

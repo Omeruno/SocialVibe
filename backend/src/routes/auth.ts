@@ -6,6 +6,7 @@ import {
   generateRefreshToken,
   REFRESH_TOKEN_TTL_MS,
   signAccessToken,
+  splitRefreshToken,
 } from "../lib/auth.js";
 import { requireAuth } from "../lib/requireAuth.js";
 
@@ -20,21 +21,25 @@ const credentialsSchema = z.object({
 
 async function issueTokenPair(userId: string, username: string) {
   const accessToken = signAccessToken({ userId, username });
-  const refreshToken = generateRefreshToken();
+  const refresh = generateRefreshToken();
+  const verifierHash = await bcrypt.hash(refresh.verifier, 10);
 
   await prisma.refreshToken.create({
     data: {
-      token: refreshToken,
+      selector: refresh.selector,
+      verifierHash,
       userId,
       expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
     },
   });
 
-  return { accessToken, refreshToken };
+  return { accessToken, refreshToken: refresh.token };
 }
 
 export async function authRoutes(app: FastifyInstance) {
-  app.post("/auth/register", async (request, reply) => {
+  const authRateLimit = { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } };
+
+  app.post("/auth/register", authRateLimit, async (request, reply) => {
     const parsed = credentialsSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.flatten() });
@@ -58,7 +63,7 @@ export async function authRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/auth/login", async (request, reply) => {
+  app.post("/auth/login", authRateLimit, async (request, reply) => {
     const parsed = credentialsSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.flatten() });
@@ -89,12 +94,19 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: parsed.error.flatten() });
     }
 
+    const split = splitRefreshToken(parsed.data.refreshToken);
+    if (!split) {
+      return reply.code(401).send({ error: "Refresh token invalid or expired" });
+    }
+
     const stored = await prisma.refreshToken.findUnique({
-      where: { token: parsed.data.refreshToken },
+      where: { selector: split.selector },
       include: { user: true },
     });
 
-    if (!stored || stored.expiresAt < new Date()) {
+    const verifierMatches = stored ? await bcrypt.compare(split.verifier, stored.verifierHash) : false;
+
+    if (!stored || !verifierMatches || stored.expiresAt < new Date()) {
       return reply.code(401).send({ error: "Refresh token invalid or expired" });
     }
 
