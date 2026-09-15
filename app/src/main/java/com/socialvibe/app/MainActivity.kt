@@ -1,8 +1,12 @@
 package com.socialvibe.app
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -22,8 +26,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.socialvibe.app.model.Contact
+import com.socialvibe.app.service.MessagingService
 import com.socialvibe.app.ui.AppViewModel
 import com.socialvibe.app.ui.components.BottomDock
 import com.socialvibe.app.ui.components.DockTab
@@ -75,6 +81,25 @@ private fun SocialVibeApp(viewModel: AppViewModel = viewModel()) {
             screen = Screen.Home
         } else if (session == null && screen !is Screen.Login) {
             screen = Screen.Login
+        }
+    }
+
+    val context = LocalContext.current
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* Denied just means no local notifications; the service still runs. */ }
+
+    // The background-connection service (see MessagingService — our
+    // no-Google stand-in for push) only makes sense once we have a session
+    // to authenticate its socket with, and must stop on logout.
+    LaunchedEffect(session != null) {
+        if (session != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            MessagingService.start(context)
+        } else {
+            MessagingService.stop(context)
         }
     }
 
