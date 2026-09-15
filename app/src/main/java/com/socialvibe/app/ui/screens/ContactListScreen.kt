@@ -21,6 +21,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,7 +50,9 @@ fun ContactListScreen(
     contacts: List<Contact>,
     myStatus: UserStatus,
     onStatusChange: (UserStatus) -> Unit,
-    onContactClick: (Contact) -> Unit
+    onContactClick: (Contact) -> Unit,
+    onAddContact: (String) -> Unit,
+    onLogout: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
     val filtered = remember(contacts, query) {
@@ -57,17 +60,21 @@ fun ContactListScreen(
     }
     val online = remember(filtered) { filtered.filter { it.isOnline } }
     val offline = remember(filtered) { filtered.filter { !it.isOnline } }
+    val nothingFound = query.isNotBlank() && online.isEmpty() && offline.isEmpty()
 
     Column(modifier = Modifier.fillMaxSize().background(XpSilver)) {
         XpTitleBar(title = "SocialVibe — Contacts")
-        MyProfileRow(status = myStatus, onStatusChange = onStatusChange)
+        MyProfileRow(status = myStatus, onStatusChange = onStatusChange, onLogout = onLogout)
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-            placeholder = { Text("Search contacts...") },
+            placeholder = { Text("Search or add by username...") },
             singleLine = true
         )
+        if (nothingFound) {
+            AddContactPrompt(username = query, onAddContact = { onAddContact(query); query = "" })
+        }
         LazyColumn(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
             if (online.isNotEmpty()) {
                 item { SectionHeader(text = "Online (${online.size})") }
@@ -88,7 +95,20 @@ fun ContactListScreen(
 }
 
 @Composable
-private fun MyProfileRow(status: UserStatus, onStatusChange: (UserStatus) -> Unit) {
+private fun AddContactPrompt(username: String, onAddContact: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = "No contact named \"$username\" yet.", fontSize = 12.sp, modifier = Modifier.weight(1f))
+        TextButton(onClick = onAddContact) {
+            Text("Add")
+        }
+    }
+}
+
+@Composable
+private fun MyProfileRow(status: UserStatus, onStatusChange: (UserStatus) -> Unit, onLogout: () -> Unit) {
     var menuExpanded by remember { mutableStateOf(false) }
     Box {
         Row(
@@ -116,6 +136,13 @@ private fun MyProfileRow(status: UserStatus, onStatusChange: (UserStatus) -> Uni
                     }
                 )
             }
+            DropdownMenuItem(
+                text = { Text("Log out") },
+                onClick = {
+                    menuExpanded = false
+                    onLogout()
+                }
+            )
         }
     }
 }

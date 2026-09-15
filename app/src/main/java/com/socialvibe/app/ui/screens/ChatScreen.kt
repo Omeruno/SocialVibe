@@ -2,7 +2,6 @@ package com.socialvibe.app.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,20 +36,24 @@ import com.socialvibe.app.ui.components.pressScale
 import com.socialvibe.app.ui.theme.XpBubbleMine
 import com.socialvibe.app.ui.theme.XpBubbleTheirs
 import com.socialvibe.app.ui.theme.XpSilver
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.random.Random
 
 private val timeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
-private val autoReplies = listOf("haha true", "lol nice", "one sec", "for real?", "same here", "brb")
 
 @Composable
-fun ChatScreen(contact: Contact, initialMessages: List<Message>, onBack: () -> Unit) {
-    var messages by remember(contact.id) { mutableStateOf(initialMessages) }
+fun ChatScreen(
+    contact: Contact,
+    messages: List<Message>,
+    isContactTyping: Boolean,
+    onSendMessage: (String) -> Unit,
+    onTypingChanged: (Boolean) -> Unit,
+    onBack: () -> Unit
+) {
     var input by remember { mutableStateOf("") }
-    var isTyping by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     BackHandler(onBack = onBack)
@@ -61,15 +64,14 @@ fun ChatScreen(contact: Contact, initialMessages: List<Message>, onBack: () -> U
         }
     }
 
-    LaunchedEffect(isTyping) {
-        if (isTyping) {
-            delay(1400)
-            messages = messages + Message(
-                id = "reply-${messages.size}",
-                text = autoReplies[Random.nextInt(autoReplies.size)],
-                isFromMe = false
-            )
-            isTyping = false
+    // Debounced typing signal: fires "typing" on every keystroke, then
+    // "stopped typing" after 2s of inactivity — restarted on each new
+    // keystroke via LaunchedEffect's key-based cancellation.
+    LaunchedEffect(input) {
+        if (input.isNotEmpty()) {
+            onTypingChanged(true)
+            delay(2000)
+            onTypingChanged(false)
         }
     }
 
@@ -80,8 +82,8 @@ fun ChatScreen(contact: Contact, initialMessages: List<Message>, onBack: () -> U
             modifier = Modifier.weight(1f).fillMaxWidth().padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(messages) { message -> MessageBubble(message) }
-            if (isTyping) {
+            items(messages, key = { it.id }) { message -> MessageBubble(message) }
+            if (isContactTyping) {
                 item { TypingIndicator() }
             }
         }
@@ -101,13 +103,9 @@ fun ChatScreen(contact: Contact, initialMessages: List<Message>, onBack: () -> U
                 interactionSource = sendInteractionSource,
                 onClick = {
                     if (input.isNotBlank()) {
-                        messages = messages + Message(
-                            id = "local-${messages.size}",
-                            text = input,
-                            isFromMe = true
-                        )
+                        onSendMessage(input)
                         input = ""
-                        isTyping = true
+                        onTypingChanged(false)
                     }
                 }
             ) {

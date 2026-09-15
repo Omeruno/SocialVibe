@@ -15,19 +15,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.weight
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
-import com.socialvibe.app.data.MockData
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.socialvibe.app.model.Contact
-import com.socialvibe.app.model.UserStatus
+import com.socialvibe.app.ui.AppViewModel
 import com.socialvibe.app.ui.components.BottomDock
 import com.socialvibe.app.ui.components.DockTab
 import com.socialvibe.app.ui.screens.ChatScreen
 import com.socialvibe.app.ui.screens.ContactListScreen
+import com.socialvibe.app.ui.screens.LoginScreen
 import com.socialvibe.app.ui.screens.SettingsScreen
 import com.socialvibe.app.ui.screens.SplashScreen
 import com.socialvibe.app.ui.theme.SocialVibeTheme
@@ -47,23 +49,43 @@ class MainActivity : ComponentActivity() {
 
 private sealed class Screen {
     data object Splash : Screen()
+    data object Login : Screen()
     data object Home : Screen()
     data class Chat(val contact: Contact) : Screen()
 }
 
 @Composable
-private fun SocialVibeApp() {
+private fun SocialVibeApp(viewModel: AppViewModel = viewModel()) {
     var screen by remember { mutableStateOf<Screen>(Screen.Splash) }
     var tab by remember { mutableStateOf(DockTab.CONTACTS) }
-    var myStatus by remember { mutableStateOf(UserStatus.ONLINE) }
-    val contacts = remember { MockData.contacts.toMutableStateList() }
+
+    val session by viewModel.session.collectAsState()
+    val contacts by viewModel.contacts.collectAsState()
+    val myStatus by viewModel.myStatus.collectAsState()
+    val authError by viewModel.authError.collectAsState()
+    val messagesByContact by viewModel.messagesByContact.collectAsState()
+    val typingContacts by viewModel.typingContacts.collectAsState()
+
+    // Reacts to session changes that happen after the initial splash
+    // decision: a successful login/register while on the Login screen, or
+    // a logout from anywhere else in the app.
+    LaunchedEffect(session) {
+        if (screen is Screen.Splash) return@LaunchedEffect
+        if (session != null && screen is Screen.Login) {
+            screen = Screen.Home
+        } else if (session == null && screen !is Screen.Login) {
+            screen = Screen.Login
+        }
+    }
 
     fun openChat(contact: Contact) {
-        val index = contacts.indexOfFirst { it.id == contact.id }
-        if (index != -1 && contacts[index].unreadCount > 0) {
-            contacts[index] = contacts[index].copy(unreadCount = 0)
-        }
+        viewModel.openChat(contact.id)
         screen = Screen.Chat(contact)
+    }
+
+    fun goHome() {
+        viewModel.closeChat()
+        screen = Screen.Home
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -77,20 +99,32 @@ private fun SocialVibeApp() {
             label = "screen-transition"
         ) { targetScreen ->
             when (targetScreen) {
-                is Screen.Splash -> SplashScreen(onFinished = { screen = Screen.Home })
+                is Screen.Splash -> SplashScreen(onFinished = {
+                    screen = if (session != null) Screen.Home else Screen.Login
+                })
+                is Screen.Login -> LoginScreen(
+                    error = authError,
+                    onLogin = { username, password -> viewModel.login(username, password) },
+                    onRegister = { username, password -> viewModel.register(username, password) }
+                )
                 is Screen.Home -> when (tab) {
                     DockTab.CONTACTS -> ContactListScreen(
                         contacts = contacts,
                         myStatus = myStatus,
-                        onStatusChange = { myStatus = it },
-                        onContactClick = { contact -> openChat(contact) }
+                        onStatusChange = { viewModel.setStatus(it) },
+                        onContactClick = { contact -> openChat(contact) },
+                        onAddContact = { username -> viewModel.addContact(username) },
+                        onLogout = { viewModel.logout() }
                     )
                     DockTab.SETTINGS -> SettingsScreen()
                 }
                 is Screen.Chat -> ChatScreen(
                     contact = targetScreen.contact,
-                    initialMessages = MockData.conversations[targetScreen.contact.id] ?: emptyList(),
-                    onBack = { screen = Screen.Home }
+                    messages = messagesByContact[targetScreen.contact.id].orEmpty(),
+                    isContactTyping = targetScreen.contact.id in typingContacts,
+                    onSendMessage = { text -> viewModel.sendMessage(targetScreen.contact.id, text) },
+                    onTypingChanged = { isTyping -> viewModel.setTyping(targetScreen.contact.id, isTyping) },
+                    onBack = { goHome() }
                 )
             }
         }
