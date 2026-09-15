@@ -5,11 +5,11 @@ import com.socialvibe.app.model.Message
 
 object MockData {
     val contacts = listOf(
-        Contact("1", "Alex", "brb, making tea", true),
-        Contact("2", "Kate", "away from keyboard", false),
-        Contact("3", "Nikita", "who wants pizza?", true),
-        Contact("4", "Olga", "offline until Monday", false),
-        Contact("5", "Dan", "*listening to music*", true)
+        Contact("1", "Alex", "brb, making tea", isOnline = true, unreadCount = 1),
+        Contact("2", "Kate", "away from keyboard", isOnline = false, unreadCount = 0),
+        Contact("3", "Nikita", "who wants pizza?", isOnline = true, unreadCount = 2),
+        Contact("4", "Olga", "offline until Monday", isOnline = false, unreadCount = 0),
+        Contact("5", "Dan", "*listening to music*", isOnline = true, unreadCount = 0)
     )
 
     val conversations: Map<String, List<Message>> = mapOf(

@@ -1,5 +1,6 @@
 package com.socialvibe.app.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,8 +37,10 @@ fun ChatScreen(contact: Contact, initialMessages: List<Message>, onBack: () -> U
     var messages by remember(contact.id) { mutableStateOf(initialMessages) }
     var input by remember { mutableStateOf("") }
 
+    BackHandler(onBack = onBack)
+
     Column(modifier = Modifier.fillMaxSize().background(XpSilver)) {
-        XpTitleBar(title = contact.name)
+        XpTitleBar(title = contact.name, onBack = onBack)
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth().padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
