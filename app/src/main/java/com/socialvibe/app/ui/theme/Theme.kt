@@ -5,20 +5,20 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val SocialVibeColorScheme = lightColorScheme(
-    primary = XpBlueTitle,
-    secondary = XpGreenOnline,
-    background = XpSilver,
-    surface = XpSilverDark,
-    onPrimary = Color.White,
-    onBackground = XpTextDark,
-    onSurface = XpTextDark
-)
-
 @Composable
-fun SocialVibeTheme(content: @Composable () -> Unit) {
+fun SocialVibeTheme(scheme: AppScheme = AppScheme.BLUE, content: @Composable () -> Unit) {
+    val colors = schemeColorsFor(scheme)
+    val materialColors = lightColorScheme(
+        primary = colors.mid,
+        secondary = colors.go,
+        background = SurfaceAlt,
+        surface = SurfaceLight,
+        onPrimary = Color.White,
+        onBackground = InkStrong,
+        onSurface = InkStrong
+    )
     MaterialTheme(
-        colorScheme = SocialVibeColorScheme,
+        colorScheme = materialColors,
         typography = Typography,
         content = content
     )

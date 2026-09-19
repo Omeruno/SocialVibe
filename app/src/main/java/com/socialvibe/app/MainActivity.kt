@@ -1,6 +1,7 @@
 package com.socialvibe.app
 
 import android.Manifest
+import android.app.Activity
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -14,9 +15,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.weight
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,22 +30,21 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.socialvibe.app.model.Contact
 import com.socialvibe.app.service.MessagingService
 import com.socialvibe.app.ui.AppViewModel
-import com.socialvibe.app.ui.components.BottomDock
-import com.socialvibe.app.ui.components.DockTab
-import com.socialvibe.app.ui.screens.ChatScreen
-import com.socialvibe.app.ui.screens.ContactListScreen
+import com.socialvibe.app.ui.screens.DesktopScreen
 import com.socialvibe.app.ui.screens.LoginScreen
-import com.socialvibe.app.ui.screens.SettingsScreen
 import com.socialvibe.app.ui.screens.SplashScreen
 import com.socialvibe.app.ui.theme.SocialVibeTheme
+import com.socialvibe.app.ui.theme.schemeColorsFor
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            SocialVibeTheme {
+            val viewModel: AppViewModel = viewModel()
+            val scheme by viewModel.scheme.collectAsState()
+            SocialVibeTheme(scheme = scheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    SocialVibeApp()
+                    SocialVibeApp(viewModel)
                 }
             }
         }
@@ -56,21 +54,22 @@ class MainActivity : ComponentActivity() {
 private sealed class Screen {
     data object Splash : Screen()
     data object Login : Screen()
-    data object Home : Screen()
-    data class Chat(val contact: Contact) : Screen()
+    data object Desktop : Screen()
 }
 
 @Composable
-private fun SocialVibeApp(viewModel: AppViewModel = viewModel()) {
+private fun SocialVibeApp(viewModel: AppViewModel) {
     var screen by remember { mutableStateOf<Screen>(Screen.Splash) }
-    var tab by remember { mutableStateOf(DockTab.CONTACTS) }
+    var activeChatContact by remember { mutableStateOf<Contact?>(null) }
 
     val session by viewModel.session.collectAsState()
+    val scheme by viewModel.scheme.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
     val myStatus by viewModel.myStatus.collectAsState()
     val authError by viewModel.authError.collectAsState()
     val messagesByContact by viewModel.messagesByContact.collectAsState()
     val typingContacts by viewModel.typingContacts.collectAsState()
+    val colors = schemeColorsFor(scheme)
 
     // Reacts to session changes that happen after the initial splash
     // decision: a successful login/register while on the Login screen, or
@@ -78,9 +77,10 @@ private fun SocialVibeApp(viewModel: AppViewModel = viewModel()) {
     LaunchedEffect(session) {
         if (screen is Screen.Splash) return@LaunchedEffect
         if (session != null && screen is Screen.Login) {
-            screen = Screen.Home
+            screen = Screen.Desktop
         } else if (session == null && screen !is Screen.Login) {
             screen = Screen.Login
+            activeChatContact = null
         }
     }
 
@@ -103,58 +103,64 @@ private fun SocialVibeApp(viewModel: AppViewModel = viewModel()) {
         }
     }
 
+    // Re-resolves against the live contacts list every recomposition so an
+    // open chat's header reflects fresh presence/unread state rather than
+    // a stale snapshot captured at click-time.
+    val currentChat = activeChatContact?.let { active -> contacts.find { it.id == active.id } ?: active }
+    val currentChatId = currentChat?.id
+    val isContactTyping = currentChatId != null && currentChatId in typingContacts
+
     fun openChat(contact: Contact) {
+        activeChatContact = contact
         viewModel.openChat(contact.id)
-        screen = Screen.Chat(contact)
     }
 
-    fun goHome() {
+    fun backFromChat() {
+        activeChatContact = null
         viewModel.closeChat()
-        screen = Screen.Home
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        AnimatedContent(
-            targetState = screen,
-            modifier = Modifier.weight(1f),
-            transitionSpec = {
-                (scaleIn(initialScale = 0.92f, animationSpec = tween(220)) + fadeIn(tween(220)))
-                    .togetherWith(scaleOut(targetScale = 1.05f, animationSpec = tween(180)) + fadeOut(tween(180)))
-            },
-            label = "screen-transition"
-        ) { targetScreen ->
-            when (targetScreen) {
-                is Screen.Splash -> SplashScreen(onFinished = {
-                    screen = if (session != null) Screen.Home else Screen.Login
-                })
-                is Screen.Login -> LoginScreen(
-                    error = authError,
-                    onLogin = { username, password -> viewModel.login(username, password) },
-                    onRegister = { username, password -> viewModel.register(username, password) }
-                )
-                is Screen.Home -> when (tab) {
-                    DockTab.CONTACTS -> ContactListScreen(
-                        contacts = contacts,
-                        myStatus = myStatus,
-                        onStatusChange = { viewModel.setStatus(it) },
-                        onContactClick = { contact -> openChat(contact) },
-                        onAddContact = { username -> viewModel.addContact(username) },
-                        onLogout = { viewModel.logout() }
-                    )
-                    DockTab.SETTINGS -> SettingsScreen()
-                }
-                is Screen.Chat -> ChatScreen(
-                    contact = targetScreen.contact,
-                    messages = messagesByContact[targetScreen.contact.id].orEmpty(),
-                    isContactTyping = targetScreen.contact.id in typingContacts,
-                    onSendMessage = { text -> viewModel.sendMessage(targetScreen.contact.id, text) },
-                    onTypingChanged = { isTyping -> viewModel.setTyping(targetScreen.contact.id, isTyping) },
-                    onBack = { goHome() }
-                )
-            }
-        }
-        if (screen is Screen.Home) {
-            BottomDock(selected = tab, onSelect = { tab = it })
+    AnimatedContent(
+        targetState = screen,
+        transitionSpec = {
+            (scaleIn(initialScale = 0.92f, animationSpec = tween(220)) + fadeIn(tween(220)))
+                .togetherWith(scaleOut(targetScale = 1.05f, animationSpec = tween(180)) + fadeOut(tween(180)))
+        },
+        label = "screen-transition"
+    ) { targetScreen ->
+        when (targetScreen) {
+            is Screen.Splash -> SplashScreen(
+                colors = colors,
+                onFinished = { screen = if (session != null) Screen.Desktop else Screen.Login }
+            )
+            is Screen.Login -> LoginScreen(
+                colors = colors,
+                scheme = scheme,
+                onSchemeChange = { viewModel.setScheme(it) },
+                error = authError,
+                onLogin = { username, password -> viewModel.login(username, password) },
+                onRegister = { username, password -> viewModel.register(username, password) }
+            )
+            is Screen.Desktop -> DesktopScreen(
+                colors = colors,
+                scheme = scheme,
+                onSchemeChange = { viewModel.setScheme(it) },
+                contacts = contacts,
+                myUsername = session?.username ?: "",
+                myStatus = myStatus,
+                onStatusChange = { viewModel.setStatus(it) },
+                activeChat = currentChat,
+                messages = currentChatId?.let { messagesByContact[it] }.orEmpty(),
+                isContactTyping = isContactTyping,
+                onContactClick = { contact -> openChat(contact) },
+                onAddContact = { username -> viewModel.addContact(username) },
+                onBackFromChat = { backFromChat() },
+                onSendMessage = { text -> currentChatId?.let { viewModel.sendMessage(it, text) } },
+                onTypingChanged = { typing -> currentChatId?.let { viewModel.setTyping(it, typing) } },
+                onRefreshContacts = { viewModel.refreshContacts() },
+                onLogout = { viewModel.logout() },
+                onExit = { (context as? Activity)?.finish() }
+            )
         }
     }
 }

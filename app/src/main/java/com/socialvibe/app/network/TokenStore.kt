@@ -16,6 +16,7 @@ private object Keys {
     val USERNAME = stringPreferencesKey("username")
     val ACCESS_TOKEN = stringPreferencesKey("access_token")
     val REFRESH_TOKEN = stringPreferencesKey("refresh_token")
+    val COLOR_SCHEME = stringPreferencesKey("color_scheme")
 }
 
 class TokenStore(private val context: Context) {
@@ -26,6 +27,11 @@ class TokenStore(private val context: Context) {
         val refreshToken = prefs[Keys.REFRESH_TOKEN] ?: return@map null
         Session(userId, username, accessToken, refreshToken)
     }
+
+    // A device preference, not tied to who's logged in — kept as a plain
+    // string here rather than the ui-layer's AppScheme enum, so this
+    // network-adjacent class doesn't need to know that type exists.
+    val schemeName: Flow<String?> = context.sessionDataStore.data.map { it[Keys.COLOR_SCHEME] }
 
     suspend fun save(session: Session) {
         context.sessionDataStore.edit { prefs ->
@@ -43,7 +49,18 @@ class TokenStore(private val context: Context) {
         }
     }
 
+    suspend fun saveSchemeName(name: String) {
+        context.sessionDataStore.edit { prefs -> prefs[Keys.COLOR_SCHEME] = name }
+    }
+
+    // Only the session half — the scheme is a device preference that
+    // should survive logging out.
     suspend fun clear() {
-        context.sessionDataStore.edit { it.clear() }
+        context.sessionDataStore.edit { prefs ->
+            prefs.remove(Keys.USER_ID)
+            prefs.remove(Keys.USERNAME)
+            prefs.remove(Keys.ACCESS_TOKEN)
+            prefs.remove(Keys.REFRESH_TOKEN)
+        }
     }
 }

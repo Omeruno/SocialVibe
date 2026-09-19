@@ -8,9 +8,11 @@ import com.socialvibe.app.model.Contact
 import com.socialvibe.app.model.Message
 import com.socialvibe.app.model.UserStatus
 import com.socialvibe.app.network.Session
+import com.socialvibe.app.ui.theme.AppScheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -19,6 +21,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _session = MutableStateFlow<Session?>(null)
     val session: StateFlow<Session?> = _session.asStateFlow()
+
+    // A device preference, not session state — loaded up front so it's
+    // already correct on the login screen, and survives logging out.
+    private val _scheme = MutableStateFlow(AppScheme.BLUE)
+    val scheme: StateFlow<AppScheme> = _scheme.asStateFlow()
 
     private val _contacts = MutableStateFlow<List<Contact>>(emptyList())
     val contacts: StateFlow<List<Contact>> = _contacts.asStateFlow()
@@ -39,10 +46,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
+            val savedScheme = repository.schemeName.first()
+            _scheme.value = savedScheme?.let { name ->
+                runCatching { AppScheme.valueOf(name) }.getOrNull()
+            } ?: AppScheme.BLUE
+        }
+        viewModelScope.launch {
             val restored = repository.restoreSession()
             _session.value = restored
             if (restored != null) onSessionEstablished()
         }
+    }
+
+    fun setScheme(newScheme: AppScheme) {
+        _scheme.value = newScheme
+        viewModelScope.launch { repository.saveSchemeName(newScheme.name) }
     }
 
     private fun onSessionEstablished() {
@@ -98,7 +116,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun refreshContacts() {
+    fun refreshContacts() {
         viewModelScope.launch {
             repository.loadContacts().onSuccess { loaded -> _contacts.value = loaded }
         }

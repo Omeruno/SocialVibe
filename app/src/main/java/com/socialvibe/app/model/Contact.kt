@@ -5,5 +5,6 @@ data class Contact(
     val name: String,
     val statusMessage: String,
     val isOnline: Boolean,
-    val unreadCount: Int = 0
+    val unreadCount: Int = 0,
+    val lastMessageAt: Long? = null
 )

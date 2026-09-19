@@ -12,6 +12,9 @@ import com.socialvibe.app.network.Session
 import com.socialvibe.app.network.SocketManager
 import com.socialvibe.app.network.TokenStore
 import com.socialvibe.app.network.toMessageInfo
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -31,6 +34,10 @@ class ChatRepository(context: Context) {
     @Volatile private var currentRefreshToken: String? = null
     @Volatile var currentUserId: String? = null
         private set
+
+    val schemeName: Flow<String?> = tokenStore.schemeName
+
+    suspend fun saveSchemeName(name: String) = tokenStore.saveSchemeName(name)
 
     suspend fun restoreSession(): Session? {
         val session = tokenStore.session.first()
@@ -92,8 +99,32 @@ class ChatRepository(context: Context) {
             }
         }
 
+    // Enriches each contact with a real last-message preview + timestamp
+    // (fetched in parallel) instead of a static bio line — the backend's
+    // history endpoint sorts oldest-first for pagination, so "most recent"
+    // means fetching a page and taking the tail client-side. Each of these
+    // per-contact fetches skips the auto-refresh wrapper deliberately: if
+    // several ran concurrently and all hit an expired token, they'd race
+    // to redeem the same single-use refresh token and all but one would
+    // fail (see withAutoRefresh) — better to just skip a preview than to
+    // risk that cascade.
     suspend fun loadContacts(): Result<List<Contact>> = runCatching {
-        withAutoRefresh { api.getContacts() }.map { it.toContact() }
+        val baseContacts = withAutoRefresh { api.getContacts() }.map { it.toContact() }
+        coroutineScope {
+            baseContacts.map { contact ->
+                async {
+                    val last = runCatching { api.getMessages(contact.id, limit = 50) }.getOrNull()?.lastOrNull()
+                    if (last != null) {
+                        contact.copy(
+                            statusMessage = last.text,
+                            lastMessageAt = parseIsoToEpochMillis(last.createdAt)
+                        )
+                    } else {
+                        contact
+                    }
+                }
+            }.awaitAll()
+        }
     }
 
     suspend fun addContact(username: String): Result<Contact> = runCatching {
